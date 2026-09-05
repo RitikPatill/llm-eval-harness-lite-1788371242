@@ -3,8 +3,7 @@ import asyncio
 import click
 from rich import print as rprint
 
-from eval.dataset import load_dataset
-from eval.db import init_db
+from eval.runner import execute_run
 
 
 @click.group()
@@ -21,13 +20,8 @@ def cli():
 @click.option("--db", default="eval.db", show_default=True)
 def run(dataset, prompt, model, scorer, db):
     """Run an evaluation."""
-    asyncio.run(init_db(db))
-    rows = load_dataset(dataset)
-    rprint(
-        f"[stub] run called with dataset={dataset!r}, prompt={prompt!r}, "
-        f"model={model!r}, scorer={scorer!r}, db={db!r}"
-    )
-    rprint(f"[green]Loaded {len(rows)} dataset rows.[/green]")
+    run_id = asyncio.run(execute_run(dataset, prompt, model, scorer, db))
+    rprint(f"[green]Run {run_id} complete.[/green]")
 
 
 @cli.command()
