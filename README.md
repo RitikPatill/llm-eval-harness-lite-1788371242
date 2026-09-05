@@ -2,22 +2,25 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-M2%20data%20layer-yellow.svg)]()
+[![Status](https://img.shields.io/badge/status-M3%20async%20runner-yellow.svg)]()
 
 > A minimal, self-contained evaluation harness for LLM outputs. Define datasets, prompt templates, and scorer functions — run against OpenAI or Anthropic models, score results, and inspect everything via a Rich CLI or FastAPI dashboard. Under 1000 lines. No cloud required.
 
 ---
 
-## What works now (M2)
+## What works now (M3)
 
 - `pip install -e .` installs the package from `src/eval/`
-- `python -m eval --help` lists three sub-commands: `run`, `show`, `compare`
-- `python -m eval run --dataset datasets/qa_sample.jsonl --prompt prompts/qa.j2 --model gpt-4o-mini --scorer exact_match` — loads the dataset, initialises `eval.db`, prints a stub summary
-- `datasets/qa_sample.jsonl` ships with 10 factual Q&A pairs ready for M4 exact-match scoring
-- `src/eval/db.py` — `init_db()` creates the four SQLite tables; `get_db()` is an async context manager for later milestones
+- `python -m eval run --dataset datasets/qa_sample.jsonl --prompt prompts/qa.j2 --model gpt-4o-mini --scorer exact_match` — **fully functional**: loads the dataset, renders Jinja2 prompts, calls the model async with a semaphore-limited concurrency of 5, persists run/prompt/response rows to SQLite, shows a Rich progress bar, and prints the run ID on completion
+- `src/eval/adapters.py` — `OpenAIAdapter` and `AnthropicAdapter` behind a `ModelAdapter` protocol; routed by `get_adapter(model)`; latency measured via `time.perf_counter()`
+- `src/eval/templates.py` — `load_template()` + `render()` using `jinja2.StrictUndefined` (typos in template vars raise loudly)
+- `prompts/qa.j2` — sample Jinja2 prompt template for factual Q&A
+- `src/eval/runner.py` — `execute_run()`: async orchestration with `asyncio.Semaphore(5)`, single `aiosqlite` connection shared across tasks, Rich progress bar
+- `datasets/qa_sample.jsonl` — 10 factual Q&A pairs
+- `src/eval/db.py` — `init_db()` + `get_db()` async context manager
 - `src/eval/models.py` — Pydantic v2 models: `DatasetRow`, `RunRecord`, `ScoreRecord`
-- `src/eval/dataset.py` — `load_dataset()` reads and validates JSONL; raises `ValueError` with line number on bad rows
-- `pytest` passes 5 tests (2 smoke + 3 data-layer tests)
+- `src/eval/dataset.py` — JSONL loader with per-line validation
+- `pytest` passes **14 tests** (adapter mocks, template rendering, runner integration, data-layer, smoke)
 
 ---
 
@@ -41,13 +44,15 @@ scorers/           <- Custom scorer functions (plain Python)                    
 
 src/eval/
   __init__.py      <- Package init, version string                               [exists]
-  __main__.py      <- Click CLI: run, show, compare (stubs)                      [exists M2]
+  __main__.py      <- Click CLI: run (functional), show/compare (stubs)          [updated M3]
   py.typed         <- PEP 561 marker                                             [exists]
   db.py            <- SQLite init + get_db context manager (aiosqlite)           [exists M2]
   models.py        <- Pydantic v2: DatasetRow, RunRecord, ScoreRecord            [exists M2]
   dataset.py       <- load_dataset(): JSONL loader with validation               [exists M2]
-  runner.py        <- Async batch model calls (OpenAI + Anthropic)               [planned M3]
-  scorers.py       <- Built-in scorers: exact_match, contains, llm_judge         [planned M3]
+  adapters.py      <- OpenAI + Anthropic adapters behind ModelAdapter protocol    [exists M3]
+  templates.py     <- Jinja2 template loader + renderer (StrictUndefined)        [exists M3]
+  runner.py        <- Async batch runner: semaphore, progress bar, SQLite writes  [exists M3]
+  scorers.py       <- Built-in scorers: exact_match, contains, llm_judge         [planned M4]
   server.py        <- FastAPI dashboard                                          [planned M6]
 
 datasets/
@@ -56,6 +61,9 @@ datasets/
 tests/
   test_package.py     <- Smoke tests: version string, CLI help                   [exists]
   test_data_layer.py  <- DB init + dataset loader tests                          [exists M2]
+  test_adapters.py    <- Adapter unit tests with mocked clients                  [exists M3]
+  test_runner.py      <- Runner integration tests with fake adapter              [exists M3]
+  test_templates.py   <- Template render + StrictUndefined tests                 [exists M3]
 
 eval.db            <- SQLite database (auto-created on first run)
 ```
@@ -87,7 +95,7 @@ eval.db            <- SQLite database (auto-created on first run)
 
 ---
 
-## CLI Usage (stubs available now; full Rich output in M5)
+## CLI Usage
 
 ```bash
 # Run an evaluation
@@ -132,30 +140,37 @@ pip install -r requirements.txt
 pip install -e .
 
 # Verify the install
-python -m eval --help   # prints run, show, compare sub-commands (stubs until M5)
+python -m eval --help   # run is fully functional; show and compare are stubs until M5
 
 # Run the test suite
 pytest
 ```
 
-Once M3–M5 are complete, the full eval workflow will be:
+Run a real eval now:
 
 ```bash
 # Set API keys
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
 
-# Run your first eval  (planned)
+# Run an eval against OpenAI
 python -m eval run \
   --dataset datasets/qa_sample.jsonl \
   --prompt prompts/qa.j2 \
   --model gpt-4o-mini \
   --scorer exact_match
 
-# Inspect results  (planned)
+# Or run against Anthropic
+python -m eval run \
+  --dataset datasets/qa_sample.jsonl \
+  --prompt prompts/qa.j2 \
+  --model claude-haiku-4-5 \
+  --scorer exact_match
+
+# Inspect results (M5)
 python -m eval show --run-id 1
 
-# Launch web dashboard  (planned)
+# Launch web dashboard (M6)
 python -m eval serve
 ```
 
@@ -207,7 +222,7 @@ Answer:
 |---|---|---|
 | M1 | Scaffold, README, pyproject.toml, LICENSE | ✅ done |
 | M2 | Data layer (SQLite schema, Pydantic models, JSONL loader) + CLI skeleton | ✅ done |
-| M3 | Model adapters (OpenAI + Anthropic), async runner | ⏳ planned |
+| M3 | Model adapters (OpenAI + Anthropic), async runner | ✅ done |
 | M4 | Scorer functions: exact_match, contains, llm_judge | ⏳ planned |
 | M5 | Rich CLI output (progress bars, coloured tables) | ⏳ planned |
 | M6 | FastAPI dashboard + README demo GIF | ⏳ planned |
