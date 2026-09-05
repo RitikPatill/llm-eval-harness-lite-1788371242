@@ -2,22 +2,22 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-M1%20scaffold-yellow.svg)]()
+[![Status](https://img.shields.io/badge/status-M2%20data%20layer-yellow.svg)]()
 
 > A minimal, self-contained evaluation harness for LLM outputs. Define datasets, prompt templates, and scorer functions — run against OpenAI or Anthropic models, score results, and inspect everything via a Rich CLI or FastAPI dashboard. Under 1000 lines. No cloud required.
 
 ---
 
-## What works now (M1)
-
-The repository scaffold is in place. These things work today:
+## What works now (M2)
 
 - `pip install -e .` installs the package from `src/eval/`
-- `python -m eval --help` prints the CLI group (no sub-commands yet)
-- `pytest` passes two smoke tests (version string, CLI help exit code)
-- All runtime and dev dependencies are pinned in `requirements.txt` and declared in `pyproject.toml`
-
-The directories `datasets/`, `prompts/`, and `scorers/` exist as empty placeholders. The source modules (`runner.py`, `scorers.py`, `db.py`, `models.py`, `server.py`) are planned but not yet written.
+- `python -m eval --help` lists three sub-commands: `run`, `show`, `compare`
+- `python -m eval run --dataset datasets/qa_sample.jsonl --prompt prompts/qa.j2 --model gpt-4o-mini --scorer exact_match` — loads the dataset, initialises `eval.db`, prints a stub summary
+- `datasets/qa_sample.jsonl` ships with 10 factual Q&A pairs ready for M4 exact-match scoring
+- `src/eval/db.py` — `init_db()` creates the four SQLite tables; `get_db()` is an async context manager for later milestones
+- `src/eval/models.py` — Pydantic v2 models: `DatasetRow`, `RunRecord`, `ScoreRecord`
+- `src/eval/dataset.py` — `load_dataset()` reads and validates JSONL; raises `ValueError` with line number on bad rows
+- `pytest` passes 5 tests (2 smoke + 3 data-layer tests)
 
 ---
 
@@ -41,18 +41,23 @@ scorers/           <- Custom scorer functions (plain Python)                    
 
 src/eval/
   __init__.py      <- Package init, version string                               [exists]
-  __main__.py      <- Click CLI entry point (stub group, no commands yet)        [exists]
+  __main__.py      <- Click CLI: run, show, compare (stubs)                      [exists M2]
   py.typed         <- PEP 561 marker                                             [exists]
+  db.py            <- SQLite init + get_db context manager (aiosqlite)           [exists M2]
+  models.py        <- Pydantic v2: DatasetRow, RunRecord, ScoreRecord            [exists M2]
+  dataset.py       <- load_dataset(): JSONL loader with validation               [exists M2]
   runner.py        <- Async batch model calls (OpenAI + Anthropic)               [planned M3]
   scorers.py       <- Built-in scorers: exact_match, contains, llm_judge         [planned M3]
-  db.py            <- SQLite persistence via aiosqlite                           [planned M4]
-  models.py        <- Pydantic data models                                       [planned M4]
   server.py        <- FastAPI dashboard                                          [planned M6]
 
-tests/
-  test_package.py  <- Smoke tests: version string, CLI help                      [exists]
+datasets/
+  qa_sample.jsonl  <- 10 factual Q&A pairs for testing                           [exists M2]
 
-eval.db            <- SQLite database (auto-created on first run)                [planned M4]
+tests/
+  test_package.py     <- Smoke tests: version string, CLI help                   [exists]
+  test_data_layer.py  <- DB init + dataset loader tests                          [exists M2]
+
+eval.db            <- SQLite database (auto-created on first run)
 ```
 
 **Flow:**
@@ -82,7 +87,7 @@ eval.db            <- SQLite database (auto-created on first run)               
 
 ---
 
-## CLI Usage (planned — M5)
+## CLI Usage (stubs available now; full Rich output in M5)
 
 ```bash
 # Run an evaluation
@@ -96,7 +101,7 @@ python -m eval run \
 python -m eval show --run-id 1
 
 # Compare two runs side-by-side
-python -m eval compare --run-ids 1,2
+python -m eval compare --run-ids 1 --run-ids 2
 ```
 
 ---
@@ -127,7 +132,7 @@ pip install -r requirements.txt
 pip install -e .
 
 # Verify the install
-python -m eval --help   # prints CLI group — sub-commands land in M5
+python -m eval --help   # prints run, show, compare sub-commands (stubs until M5)
 
 # Run the test suite
 pytest
@@ -201,10 +206,10 @@ Answer:
 | Milestone | Description | Status |
 |---|---|---|
 | M1 | Scaffold, README, pyproject.toml, LICENSE | ✅ done |
-| M2 | Dataset loader + Jinja2 prompt renderer | ⏳ planned |
+| M2 | Data layer (SQLite schema, Pydantic models, JSONL loader) + CLI skeleton | ✅ done |
 | M3 | Model adapters (OpenAI + Anthropic), async runner | ⏳ planned |
-| M4 | SQLite persistence, Pydantic models | ⏳ planned |
-| M5 | Rich CLI (`run`, `show`, `compare`) | ⏳ planned |
+| M4 | Scorer functions: exact_match, contains, llm_judge | ⏳ planned |
+| M5 | Rich CLI output (progress bars, coloured tables) | ⏳ planned |
 | M6 | FastAPI dashboard + README demo GIF | ⏳ planned |
 
 ---

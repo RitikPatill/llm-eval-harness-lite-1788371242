@@ -1,0 +1,10 @@
+{"input": "What is the capital of France?", "expected_output": "Paris"}
+{"input": "What is the capital of Germany?", "expected_output": "Berlin"}
+{"input": "What is the capital of Japan?", "expected_output": "Tokyo"}
+{"input": "What is 7 multiplied by 8?", "expected_output": "56"}
+{"input": "What is the square root of 144?", "expected_output": "12"}
+{"input": "What does CPU stand for?", "expected_output": "Central Processing Unit"}
+{"input": "What does HTTP stand for?", "expected_output": "HyperText Transfer Protocol"}
+{"input": "In what year did World War II end?", "expected_output": "1945"}
+{"input": "What is the chemical symbol for gold?", "expected_output": "Au"}
+{"input": "How many sides does a hexagon have?", "expected_output": "6"}
