@@ -2,25 +2,29 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-M3%20async%20runner-yellow.svg)]()
+[![Status](https://img.shields.io/badge/status-M4%20scorers%20%2B%20CLI-yellow.svg)]()
 
 > A minimal, self-contained evaluation harness for LLM outputs. Define datasets, prompt templates, and scorer functions — run against OpenAI or Anthropic models, score results, and inspect everything via a Rich CLI or FastAPI dashboard. Under 1000 lines. No cloud required.
 
 ---
 
-## What works now (M3)
+## What works now (M4)
 
 - `pip install -e .` installs the package from `src/eval/`
-- `python -m eval run --dataset datasets/qa_sample.jsonl --prompt prompts/qa.j2 --model gpt-4o-mini --scorer exact_match` — **fully functional**: loads the dataset, renders Jinja2 prompts, calls the model async with a semaphore-limited concurrency of 5, persists run/prompt/response rows to SQLite, shows a Rich progress bar, and prints the run ID on completion
+- `python -m eval run --dataset datasets/qa_sample.jsonl --prompt prompts/qa.j2 --model gpt-4o-mini --scorer exact_match` — **fully functional**: loads the dataset, renders Jinja2 prompts, calls the model async with a semaphore-limited concurrency of 5, persists run/prompt/response/score rows to SQLite, shows a Rich progress bar, and prints the run ID on completion
+- `src/eval/scorers.py` — three built-in scorers: `exact_match` (case-insensitive string equality), `contains` (substring check), and `llm_judge` (calls gpt-4o-mini with a rating prompt, returns 0.0–1.0); scorer resolution via `get_scorer(name)` checks built-ins first, then auto-discovers plugins
+- `scorers/` plugin directory — drop any `.py` file here with a function matching the filename stem; it is picked up automatically without any registration step; `scorers/custom_example.py` is included as a reference implementation
+- `python -m eval show --run-id N` — **fully functional**: renders a Rich table of input / expected / actual / score with colour-coded score column (green ≥ 0.8, yellow ≥ 0.5, red < 0.5) and a summary line with model, row count, and average score
+- `python -m eval compare --run-ids 1,2` — **fully functional**: fetches two runs and renders a side-by-side Rich table with per-row scores for each run
 - `src/eval/adapters.py` — `OpenAIAdapter` and `AnthropicAdapter` behind a `ModelAdapter` protocol; routed by `get_adapter(model)`; latency measured via `time.perf_counter()`
 - `src/eval/templates.py` — `load_template()` + `render()` using `jinja2.StrictUndefined` (typos in template vars raise loudly)
 - `prompts/qa.j2` — sample Jinja2 prompt template for factual Q&A
-- `src/eval/runner.py` — `execute_run()`: async orchestration with `asyncio.Semaphore(5)`, single `aiosqlite` connection shared across tasks, Rich progress bar
+- `src/eval/runner.py` — `execute_run()`: async orchestration with `asyncio.Semaphore(5)`, single `aiosqlite` connection shared across tasks, Rich progress bar, scorer wired into the pipeline
 - `datasets/qa_sample.jsonl` — 10 factual Q&A pairs
-- `src/eval/db.py` — `init_db()` + `get_db()` async context manager
+- `src/eval/db.py` — `init_db()` + `get_db()` async context manager; `fetch_run_results()` and `fetch_run_meta()` for CLI queries
 - `src/eval/models.py` — Pydantic v2 models: `DatasetRow`, `RunRecord`, `ScoreRecord`
 - `src/eval/dataset.py` — JSONL loader with per-line validation
-- `pytest` passes **14 tests** (adapter mocks, template rendering, runner integration, data-layer, smoke)
+- `pytest` passes all tests (adapter mocks, template rendering, runner integration, data-layer, scorer unit tests, smoke)
 
 ---
 
@@ -40,11 +44,11 @@
 ```
 datasets/          <- .jsonl files: {"input": "...", "expected_output": "..."}  [placeholder]
 prompts/           <- Jinja2 templates: qa.j2, cot.j2, ...                      [placeholder]
-scorers/           <- Custom scorer functions (plain Python)                     [placeholder]
+scorers/           <- Scorer plugins: drop a .py file here, auto-discovered      [exists M4]
 
 src/eval/
   __init__.py      <- Package init, version string                               [exists]
-  __main__.py      <- Click CLI: run (functional), show/compare (stubs)          [updated M3]
+  __main__.py      <- Click CLI: run, show, compare (all functional)             [updated M4]
   py.typed         <- PEP 561 marker                                             [exists]
   db.py            <- SQLite init + get_db context manager (aiosqlite)           [exists M2]
   models.py        <- Pydantic v2: DatasetRow, RunRecord, ScoreRecord            [exists M2]
@@ -52,8 +56,8 @@ src/eval/
   adapters.py      <- OpenAI + Anthropic adapters behind ModelAdapter protocol    [exists M3]
   templates.py     <- Jinja2 template loader + renderer (StrictUndefined)        [exists M3]
   runner.py        <- Async batch runner: semaphore, progress bar, SQLite writes  [exists M3]
-  scorers.py       <- Built-in scorers: exact_match, contains, llm_judge         [planned M4]
-  server.py        <- FastAPI dashboard                                          [planned M6]
+  scorers.py       <- Built-in scorers: exact_match, contains, llm_judge          [exists M4]
+  server.py        <- FastAPI dashboard                                          [planned M5]
 
 datasets/
   qa_sample.jsonl  <- 10 factual Q&A pairs for testing                           [exists M2]
@@ -64,6 +68,7 @@ tests/
   test_adapters.py    <- Adapter unit tests with mocked clients                  [exists M3]
   test_runner.py      <- Runner integration tests with fake adapter              [exists M3]
   test_templates.py   <- Template render + StrictUndefined tests                 [exists M3]
+  test_scorers.py     <- Scorer unit tests: exact_match, contains, plugin load   [exists M4]
 
 eval.db            <- SQLite database (auto-created on first run)
 ```
@@ -109,12 +114,12 @@ python -m eval run \
 python -m eval show --run-id 1
 
 # Compare two runs side-by-side
-python -m eval compare --run-ids 1 --run-ids 2
+python -m eval compare --run-ids 1,2
 ```
 
 ---
 
-## FastAPI Endpoints (planned — M6)
+## FastAPI Endpoints (planned — M5)
 
 | Method | Path | Description |
 |---|---|---|
@@ -140,7 +145,7 @@ pip install -r requirements.txt
 pip install -e .
 
 # Verify the install
-python -m eval --help   # run is fully functional; show and compare are stubs until M5
+python -m eval --help   # run, show, and compare are all functional
 
 # Run the test suite
 pytest
@@ -167,10 +172,13 @@ python -m eval run \
   --model claude-haiku-4-5 \
   --scorer exact_match
 
-# Inspect results (M5)
+# Inspect results for a specific run
 python -m eval show --run-id 1
 
-# Launch web dashboard (M6)
+# Compare two runs side-by-side
+python -m eval compare --run-ids 1,2
+
+# Launch web dashboard (M5)
 python -m eval serve
 ```
 
@@ -182,12 +190,12 @@ Drop a Python file in `scorers/`:
 
 ```python
 # scorers/my_scorer.py
-def score(response: str, expected: str) -> float:
+def my_scorer(output: str, expected: str) -> float:
     """Return a float between 0.0 and 1.0."""
-    return 1.0 if response.strip() == expected.strip() else 0.0
+    return 1.0 if output.strip() == expected.strip() else 0.0
 ```
 
-Then use `--scorer my_scorer` on the CLI.
+The function name must match the filename stem. Then use `--scorer my_scorer` on the CLI.
 
 ---
 
@@ -223,9 +231,8 @@ Answer:
 | M1 | Scaffold, README, pyproject.toml, LICENSE | ✅ done |
 | M2 | Data layer (SQLite schema, Pydantic models, JSONL loader) + CLI skeleton | ✅ done |
 | M3 | Model adapters (OpenAI + Anthropic), async runner | ✅ done |
-| M4 | Scorer functions: exact_match, contains, llm_judge | ⏳ planned |
-| M5 | Rich CLI output (progress bars, coloured tables) | ⏳ planned |
-| M6 | FastAPI dashboard + README demo GIF | ⏳ planned |
+| M4 | Scorer functions (exact_match, contains, llm_judge), plugin discovery, `eval show`, `eval compare` | ✅ done |
+| M5 | FastAPI dashboard + README demo GIF | ⏳ planned |
 
 ---
 

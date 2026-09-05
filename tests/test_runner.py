@@ -14,6 +14,10 @@ class _FakeAdapter:
         return ("fake answer", 10.0)
 
 
+def _fake_scorer(output: str, expected: str) -> float:
+    return 1.0
+
+
 async def test_execute_run_persists_to_db(tmp_path: Path, monkeypatch):
     db_path = str(tmp_path / "test.db")
 
@@ -21,6 +25,7 @@ async def test_execute_run_persists_to_db(tmp_path: Path, monkeypatch):
     prompt_path = str(Path("prompts/qa.j2").resolve())
 
     monkeypatch.setattr("eval.runner.get_adapter", lambda model: _FakeAdapter())
+    monkeypatch.setattr("eval.runner.get_scorer", lambda name: _fake_scorer)
 
     run_id = await execute_run(
         dataset_path=dataset_path,
@@ -42,9 +47,13 @@ async def test_execute_run_persists_to_db(tmp_path: Path, monkeypatch):
         cursor = await conn.execute("SELECT COUNT(*) FROM responses")
         (response_count,) = await cursor.fetchone()
 
+        cursor = await conn.execute("SELECT COUNT(*) FROM scores")
+        (score_count,) = await cursor.fetchone()
+
     assert run_count == 1
     assert prompt_count == 10
     assert response_count == 10
+    assert score_count == 10
 
 
 async def test_execute_run_stores_scorer(tmp_path: Path, monkeypatch):
@@ -53,6 +62,7 @@ async def test_execute_run_stores_scorer(tmp_path: Path, monkeypatch):
     prompt_path = str(Path("prompts/qa.j2").resolve())
 
     monkeypatch.setattr("eval.runner.get_adapter", lambda model: _FakeAdapter())
+    monkeypatch.setattr("eval.runner.get_scorer", lambda name: _fake_scorer)
 
     await execute_run(
         dataset_path=dataset_path,
