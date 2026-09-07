@@ -82,6 +82,25 @@ async def fetch_run_results(run_id: int, db_path: str | Path) -> list[dict]:
         return [dict(row) for row in rows]
 
 
+async def fetch_all_runs(db_path: str | Path) -> list[dict]:
+    """Return list of run summaries with aggregate scores."""
+    async with get_db(db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute("""
+            SELECT r.id, r.created_at, r.model, r.dataset, r.scorer,
+                   COUNT(s.id)  AS row_count,
+                   AVG(s.score) AS avg_score
+            FROM runs r
+            LEFT JOIN prompts p     ON p.run_id      = r.id
+            LEFT JOIN responses res ON res.prompt_id = p.id
+            LEFT JOIN scores s      ON s.response_id = res.id
+            GROUP BY r.id
+            ORDER BY r.id DESC
+        """)
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
 async def fetch_run_meta(run_id: int, db_path: str | Path) -> dict | None:
     """Return run metadata dict or None if not found."""
     async with get_db(db_path) as conn:

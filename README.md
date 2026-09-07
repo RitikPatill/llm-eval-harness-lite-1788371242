@@ -2,13 +2,13 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-M4%20scorers%20%2B%20CLI-yellow.svg)]()
+[![Status](https://img.shields.io/badge/status-M5%20FastAPI%20dashboard-green.svg)]()
 
 > A minimal, self-contained evaluation harness for LLM outputs. Define datasets, prompt templates, and scorer functions — run against OpenAI or Anthropic models, score results, and inspect everything via a Rich CLI or FastAPI dashboard. Under 1000 lines. No cloud required.
 
 ---
 
-## What works now (M4)
+## What works now (M5)
 
 - `pip install -e .` installs the package from `src/eval/`
 - `python -m eval run --dataset datasets/qa_sample.jsonl --prompt prompts/qa.j2 --model gpt-4o-mini --scorer exact_match` — **fully functional**: loads the dataset, renders Jinja2 prompts, calls the model async with a semaphore-limited concurrency of 5, persists run/prompt/response/score rows to SQLite, shows a Rich progress bar, and prints the run ID on completion
@@ -24,7 +24,9 @@
 - `src/eval/db.py` — `init_db()` + `get_db()` async context manager; `fetch_run_results()` and `fetch_run_meta()` for CLI queries
 - `src/eval/models.py` — Pydantic v2 models: `DatasetRow`, `RunRecord`, `ScoreRecord`
 - `src/eval/dataset.py` — JSONL loader with per-line validation
-- `pytest` passes all tests (adapter mocks, template rendering, runner integration, data-layer, scorer unit tests, smoke)
+- `src/eval/server.py` — FastAPI dashboard: `GET /` (HTML page), `GET /runs` (list all runs with aggregate scores), `GET /runs/{id}` (full detail with per-row results); factory function `create_app(db_path)` keeps the db path injectable for tests
+- `python -m eval serve` — starts uvicorn on `127.0.0.1:8000`; `--db`, `--host`, `--port` options configurable; server is optional, CLI works without it
+- `pytest` passes all 31 tests (adapter mocks, template rendering, runner integration, data-layer, scorer unit tests, server tests, smoke)
 
 ---
 
@@ -48,7 +50,7 @@ scorers/           <- Scorer plugins: drop a .py file here, auto-discovered     
 
 src/eval/
   __init__.py      <- Package init, version string                               [exists]
-  __main__.py      <- Click CLI: run, show, compare (all functional)             [updated M4]
+  __main__.py      <- Click CLI: run, show, compare, serve (all functional)      [updated M5]
   py.typed         <- PEP 561 marker                                             [exists]
   db.py            <- SQLite init + get_db context manager (aiosqlite)           [exists M2]
   models.py        <- Pydantic v2: DatasetRow, RunRecord, ScoreRecord            [exists M2]
@@ -57,7 +59,7 @@ src/eval/
   templates.py     <- Jinja2 template loader + renderer (StrictUndefined)        [exists M3]
   runner.py        <- Async batch runner: semaphore, progress bar, SQLite writes  [exists M3]
   scorers.py       <- Built-in scorers: exact_match, contains, llm_judge          [exists M4]
-  server.py        <- FastAPI dashboard                                          [planned M5]
+  server.py        <- FastAPI dashboard: /runs, /runs/{id}, / HTML page          [exists M5]
 
 datasets/
   qa_sample.jsonl  <- 10 factual Q&A pairs for testing                           [exists M2]
@@ -69,6 +71,7 @@ tests/
   test_runner.py      <- Runner integration tests with fake adapter              [exists M3]
   test_templates.py   <- Template render + StrictUndefined tests                 [exists M3]
   test_scorers.py     <- Scorer unit tests: exact_match, contains, plugin load   [exists M4]
+  test_server.py      <- Server tests: HTML, /runs, /runs/{id}, 404              [exists M5]
 
 eval.db            <- SQLite database (auto-created on first run)
 ```
@@ -119,19 +122,22 @@ python -m eval compare --run-ids 1,2
 
 ---
 
-## FastAPI Endpoints (planned — M5)
+## FastAPI Dashboard
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/runs` | List all evaluation runs |
-| `GET` | `/runs/{id}` | Full detail for one run |
-| `GET` | `/runs/{id}/scores` | Score breakdown per sample |
-| `GET` | `/` | HTML dashboard table |
+| `GET` | `/` | HTML table listing all runs (click row for detail) |
+| `GET` | `/runs` | JSON list of all runs with aggregate scores |
+| `GET` | `/runs/{id}` | JSON detail for one run including per-row results |
 
 Start the server:
 ```bash
-python -m eval serve --port 8000
+python -m eval serve                   # default: 127.0.0.1:8000, eval.db
+python -m eval serve --port 9000       # custom port
+python -m eval serve --db my_run.db   # custom DB path
 ```
+
+Then open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser.
 
 ---
 
@@ -145,7 +151,7 @@ pip install -r requirements.txt
 pip install -e .
 
 # Verify the install
-python -m eval --help   # run, show, and compare are all functional
+python -m eval --help   # run, show, compare, and serve are all functional
 
 # Run the test suite
 pytest
@@ -232,7 +238,7 @@ Answer:
 | M2 | Data layer (SQLite schema, Pydantic models, JSONL loader) + CLI skeleton | ✅ done |
 | M3 | Model adapters (OpenAI + Anthropic), async runner | ✅ done |
 | M4 | Scorer functions (exact_match, contains, llm_judge), plugin discovery, `eval show`, `eval compare` | ✅ done |
-| M5 | FastAPI dashboard + README demo GIF | ⏳ planned |
+| M5 | FastAPI dashboard (`/runs`, `/runs/{id}`, HTML page), `eval serve` CLI command | ✅ done |
 
 ---
 
