@@ -135,5 +135,16 @@ async def _compare(ids: list[int], db_path: str) -> None:
     console.print(table)
 
 
+@cli.command()
+@click.option("--db", default="eval.db", show_default=True)
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8000, show_default=True)
+def serve(db, host, port):
+    """Start the FastAPI dashboard server."""
+    import uvicorn
+    from eval.server import create_app
+    uvicorn.run(create_app(db_path=db), host=host, port=port)
+
+
 if __name__ == "__main__":
     cli()
