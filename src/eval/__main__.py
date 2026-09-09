@@ -1,8 +1,10 @@
 import asyncio
+import pathlib
 
 import click
 from rich import print as rprint
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from eval.db import fetch_run_results, fetch_run_meta
@@ -133,6 +135,66 @@ async def _compare(ids: list[int], db_path: str) -> None:
         )
 
     console.print(table)
+
+
+@cli.command()
+@click.argument("directory", default="my-eval-project")
+def init(directory: str) -> None:
+    """Scaffold a new eval project at DIRECTORY."""
+    target = pathlib.Path(directory)
+    if target.exists() and any(target.iterdir()):
+        raise click.ClickException(
+            f"'{directory}' already exists and is not empty. Choose a different directory."
+        )
+
+    # Create subdirectories
+    (target / "datasets").mkdir(parents=True, exist_ok=True)
+    (target / "prompts").mkdir(parents=True, exist_ok=True)
+    (target / "scorers").mkdir(parents=True, exist_ok=True)
+
+    # Write sample dataset (geography questions)
+    (target / "datasets" / "sample.jsonl").write_text(
+        '{"input": "What is the capital of Germany?", "expected_output": "Berlin"}\n'
+        '{"input": "What is the largest ocean on Earth?", "expected_output": "Pacific Ocean"}\n'
+        '{"input": "Which continent is Egypt located in?", "expected_output": "Africa"}\n',
+        encoding="utf-8",
+    )
+
+    # Write prompt template
+    (target / "prompts" / "qa.j2").write_text(
+        "Answer the following question concisely.\n\nQuestion: {{ input }}\nAnswer:",
+        encoding="utf-8",
+    )
+
+    # Write scorer stub
+    (target / "scorers" / "my_scorer.py").write_text(
+        'def my_scorer(output: str, expected: str) -> float:\n'
+        '    """Custom scorer stub. Return a float in [0.0, 1.0]."""\n'
+        '    return 1.0 if output.strip() == expected.strip() else 0.0\n',
+        encoding="utf-8",
+    )
+
+    # Write .env.example
+    (target / ".env.example").write_text(
+        "OPENAI_API_KEY=sk-...\n"
+        "ANTHROPIC_API_KEY=sk-ant-...\n"
+        "# Optional: path to SQLite database (default: eval.db)\n"
+        "# EVAL_DB_PATH=eval.db\n",
+        encoding="utf-8",
+    )
+
+    console.print(
+        Panel(
+            f"[green]Project scaffolded at [bold]{directory}/[/bold][/green]\n\n"
+            f"Next steps:\n"
+            f"  cd {directory}\n"
+            f"  cp .env.example .env  # add your API keys\n"
+            f"  eval run --dataset datasets/sample.jsonl --prompt prompts/qa.j2 "
+            f"--model gpt-4o-mini --scorer exact_match\n"
+            f"  eval show --run-id 1",
+            title="eval init",
+        )
+    )
 
 
 @cli.command()
