@@ -1,5 +1,9 @@
 # LLM Eval Harness Lite
 
+
+> **Video walkthrough:** https://youtu.be/9gp0ZBiH7cM
+> **60-second overview:** https://youtu.be/nVJqjMOxPVs
+
 > A lightweight, local-first framework for evaluating LLM outputs with custom scorers, prompt templates, and a CLI dashboard.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
